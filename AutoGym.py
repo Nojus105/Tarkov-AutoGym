@@ -3,6 +3,8 @@ import time
 import mss
 import numpy as np
 import pyautogui
+from pynput import keyboard
+import sys
 
 
 def detect_event(frame_bgr: np.ndarray) -> bool:
@@ -14,14 +16,22 @@ def detect_event(frame_bgr: np.ndarray) -> bool:
 	"""
 	return False
 
+running = False
 
 def main() -> None:
-	# Simple knobs
+	global running
+	def on_press(key: keyboard.Key.f8) -> None:
+		global running
+		if key == keyboard.Key.f8:
+			running = not running
+			print("Running:", running)
+		elif key == keyboard.Key.f9:
+			print("Exiting.")
+			sys.exit(0)
+	listener = keyboard.Listener(on_press=on_press)
+	listener.start()
 	poll_interval_s = 0.02  # ~50 FPS; raise to reduce CPU
 	click_pause_s = 0.05    # small pause after clicking
-
-	# Optional safety: moving mouse to top-left aborts (PyAutoGUI default).
-	pyautogui.FAILSAFE = True
 
 	with mss.mss() as sct:
 		monitor = sct.monitors[1]  # primary monitor
