@@ -9,8 +9,13 @@ from pynput import keyboard
 
 
 
+
 # tweaking
 MONITOR_INDEX = 1
+REGION_X = None  # e.g. 100
+REGION_Y = None  # e.g. 200
+REGION_W = None  # e.g. 800
+REGION_H = None  # e.g. 600
 CANNY_LOW = 60
 CANNY_HIGH = 160
 EDGE_BLUR_K = 3
@@ -67,13 +72,22 @@ def main() -> None:
 	keyboard.Listener(on_press=on_press).start()
 	with mss.mss() as sct:
 		mon = sct.monitors[MONITOR_INDEX]
+		if None not in (REGION_X, REGION_Y, REGION_W, REGION_H):
+			region = {
+				"left": int(REGION_X),
+				"top": int(REGION_Y),
+				"width": int(REGION_W),
+				"height": int(REGION_H)
+			}
+		else:
+			region = mon
 		was_detected = False
 		try:
 			while True:
 				if not running:
 					time.sleep(IDLE_SLEEP_S)
 					continue
-				frame = np.array(sct.grab(mon))[:, :, :3]  # BGRA -> BGR
+				frame = np.array(sct.grab(region))[:, :, :3]
 				if save_frame:
 					fname = f"screenshot_{int(time.time())}.png"
 					cv2.imwrite(fname, cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
