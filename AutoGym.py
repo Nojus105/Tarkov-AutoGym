@@ -12,10 +12,10 @@ from pynput import keyboard
 
 # tweaking
 MONITOR_INDEX = 1
-REGION_X = None  # e.g. 100
-REGION_Y = None  # e.g. 200
-REGION_W = None  # e.g. 800
-REGION_H = None  # e.g. 600
+REGION_X = None
+REGION_Y = None
+REGION_W = None
+REGION_H = None
 CANNY_LOW = 60
 CANNY_HIGH = 160
 EDGE_BLUR_K = 3
