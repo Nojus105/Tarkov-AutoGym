@@ -8,14 +8,13 @@ from pynput import keyboard
 
 MONITOR = 1
 REGION = {"left": 750, "top": 620, "width": 400, "height": 400}
-GAP_THRESHOLD = 70
+GAP_THRESHOLD = 50
 BRIGHTNESS_THRESH = 100
 
 running = False
 save_screenshot = False
 
 def find_hexagon_radii(frame):
-    """Find bright hexagon contours and return their enclosing circle radii."""
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     
     _, thresh = cv2.threshold(gray, BRIGHTNESS_THRESH, 255, cv2.THRESH_BINARY)
@@ -35,7 +34,6 @@ def find_hexagon_radii(frame):
     return sorted(radii, reverse=True)
 
 def should_click(frame):
-    """Return True when the gap between hexagons is small enough."""
     radii = find_hexagon_radii(frame)
     if len(radii) < 2:
         return False
