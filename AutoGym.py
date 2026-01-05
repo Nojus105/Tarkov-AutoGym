@@ -26,10 +26,6 @@ def find_hexagon_radii(frame):
     center = (frame.shape[1] // 2, frame.shape[0] // 2)
     
     for c in contours:
-        area = cv2.contourArea(c)
-        if area < 300:
-            continue
-        
         (cx, cy), radius = cv2.minEnclosingCircle(c)
         
         dist_from_center = np.sqrt((cx - center[0])**2 + (cy - center[1])**2)
