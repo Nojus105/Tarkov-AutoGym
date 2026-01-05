@@ -1,109 +1,97 @@
 import sys
 import time
-
 import cv2
 import mss
 import numpy as np
 import pyautogui
 from pynput import keyboard
 
-
-
-
-# tweaking
-MONITOR_INDEX = 1
-REGION_X = None
-REGION_Y = None
-REGION_W = None
-REGION_H = None
-CANNY_LOW = 60
-CANNY_HIGH = 160
-EDGE_BLUR_K = 3
-EDGE_DILATE = 3
-AREA_MIN = 1600
-APPROX_EPS = 0.03
-HEX_VERT_MIN = 6
-HEX_VERT_MAX = 6
-IDLE_SLEEP_S = 0.05
-LOOP_SLEEP_S = 0.02
-CLICK_SLEEP_S = 0.05
-
+MONITOR = 1
+REGION = {"left": 750, "top": 620, "width": 400, "height": 400}
+GAP_THRESHOLD = 70
+BRIGHTNESS_THRESH = 100
 
 running = False
-save_frame = False
+save_screenshot = False
 
+def find_hexagon_radii(frame):
+    """Find bright hexagon contours and return their enclosing circle radii."""
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    
+    _, thresh = cv2.threshold(gray, BRIGHTNESS_THRESH, 255, cv2.THRESH_BINARY)
+    
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    radii = []
+    center = (frame.shape[1] // 2, frame.shape[0] // 2)
+    
+    for c in contours:
+        area = cv2.contourArea(c)
+        if area < 300:
+            continue
+        
+        (cx, cy), radius = cv2.minEnclosingCircle(c)
+        
+        dist_from_center = np.sqrt((cx - center[0])**2 + (cy - center[1])**2)
+        if dist_from_center < radius * 0.5:
+            radii.append(radius)
+    
+    return sorted(radii, reverse=True)
 
-def detect(frame_bgr: np.ndarray) -> bool:
-	gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-	if EDGE_BLUR_K and EDGE_BLUR_K > 1:
-		gray = cv2.GaussianBlur(gray, (EDGE_BLUR_K, EDGE_BLUR_K), 0)
-	th = cv2.Canny(gray, CANNY_LOW, CANNY_HIGH)
-	if EDGE_DILATE and EDGE_DILATE > 1:
-		k = np.ones((EDGE_DILATE, EDGE_DILATE), np.uint8)
-		th = cv2.dilate(th, k, 1)
-	contours, _ = cv2.findContours(th, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-	hexes = 0
-	for c in contours:
-		if cv2.contourArea(c) < AREA_MIN:
-			continue
-		peri = cv2.arcLength(c, True)
-		approx = cv2.approxPolyDP(c, APPROX_EPS * peri, True)
-		v = len(approx)
-		if HEX_VERT_MIN <= v <= HEX_VERT_MAX and cv2.isContourConvex(approx):
-			hexes += 1
-	print(f"[hexes detected: {hexes}]")
-	return hexes >= 2
+def should_click(frame):
+    """Return True when the gap between hexagons is small enough."""
+    radii = find_hexagon_radii(frame)
+    if len(radii) < 2:
+        return False
+    
+    outer, inner = radii[0], radii[1]
+    gap = outer - inner
+    
+    if 0 < gap <= GAP_THRESHOLD:
+        print(f"CLICK! Gap: {gap:.1f}px, radii: {outer:.0f}, {inner:.0f}")
+        return True
+    return False
 
+def on_press(key):
+    global running, save_screenshot
+    if key == keyboard.Key.f8:
+        running = not running
+        print(f"{'Started' if running else 'Stopped'}")
+    elif key == keyboard.Key.f9:
+        print("Exiting...")
+        sys.exit(0)
+    elif key == keyboard.Key.f10:
+        save_screenshot = True
 
-def on_press(key) -> None:
-	global running, save_frame
-	if key == keyboard.Key.f8:
-		running = not running
-		print("Running:", running)
-	elif key == keyboard.Key.f9:
-		print("Exiting...")
-		sys.exit(0)
-	elif key == keyboard.Key.f10:
-		save_frame = True
-
-
-def main() -> None:
-	global save_frame
-	keyboard.Listener(on_press=on_press).start()
-	with mss.mss() as sct:
-		mon = sct.monitors[MONITOR_INDEX]
-		if None not in (REGION_X, REGION_Y, REGION_W, REGION_H):
-			region = {
-				"left": int(REGION_X),
-				"top": int(REGION_Y),
-				"width": int(REGION_W),
-				"height": int(REGION_H)
-			}
-		else:
-			region = mon
-		was_detected = False
-		try:
-			while True:
-				if not running:
-					time.sleep(IDLE_SLEEP_S)
-					continue
-				frame = np.array(sct.grab(region))[:, :, :3]
-				if save_frame:
-					fname = f"screenshot_{int(time.time())}.png"
-					cv2.imwrite(fname, cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-					print(f"Saved screenshot to {fname}")
-					save_frame = False
-				detected = detect(frame)
-				if detected and not was_detected:
-					print("Detected")
-					pyautogui.click()
-					time.sleep(CLICK_SLEEP_S)
-				else:
-					time.sleep(LOOP_SLEEP_S)
-				was_detected = detected
-		except KeyboardInterrupt:
-			print("Exiting...")
-
+def main():
+    global save_screenshot
+    print("Tarkov AutoGym - F8: start/stop, F9: exit, F10: screenshot")
+    keyboard.Listener(on_press=on_press).start()
+    
+    with mss.mss() as sct:
+        last_click = 0
+        while True:
+            if not running:
+                time.sleep(0.05)
+                continue
+            
+            frame = np.array(sct.grab(REGION))[:, :, :3]
+            
+            if save_screenshot:
+                fname = f"debug_{int(time.time())}.png"
+                cv2.imwrite(fname, frame)
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                _, thresh = cv2.threshold(gray, BRIGHTNESS_THRESH, 255, cv2.THRESH_BINARY)
+                cv2.imwrite(f"debug_thresh_{int(time.time())}.png", thresh)
+                print(f"Saved debug screenshots")
+                save_screenshot = False
+            
+            if should_click(frame) and time.time() - last_click > 0.3:
+                pyautogui.click()
+                last_click = time.time()
+                time.sleep(0.1)
+            else:
+                time.sleep(0.01)
 
 if __name__ == "__main__":
-	main()
+    main()
